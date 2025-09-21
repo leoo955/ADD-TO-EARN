@@ -1,20 +1,34 @@
-import prisma from "./lib/prisma";
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma';
 
-export async function sessionMiddleware(req: NextRequest) {
-  const cookie = req.cookies.get("session")?.value;
-  if (!cookie) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+export async function middleware(req: NextRequest) {
+  const cookie = req.cookies.get('session')?.value
 
-  const session = await prisma.session.findUnique({
-    where: { id: cookie },
-    include: { user: true },
-  });
-
-  if (!session || session.expiresAt < new Date()) {
-    return NextResponse.json({ error: "SESSION_EXPIRED" }, { status: 401 });
+  if (!cookie) {
+    // Pas de session -> continuer ou bloquer certaines routes
+    return NextResponse.next()
   }
 
-  // Inject userId in request
-  (req as any).userId = session.userId;
-  return NextResponse.next();
+  // Vérifie la session en DB
+  const session = await prisma.session.findUnique({
+    where: { id: cookie }
+  })
+
+  if (!session || session.expiresAt < new Date()) {
+    // Session invalide ou expirée
+    const res = NextResponse.next()
+    res.cookies.set('session', '', { maxAge: 0 }) // efface cookie
+    return res
+  }
+
+  // Ajoute userId au header pour les API downstream si nécessaire
+  const res = NextResponse.next()
+  res.headers.set('x-user-id', session.userId)
+  return res
+}
+
+// Routes où le middleware doit s’appliquer
+export const config = {
+  matcher: ['/api/:path*']  // Applique sur toutes les APIs
 }

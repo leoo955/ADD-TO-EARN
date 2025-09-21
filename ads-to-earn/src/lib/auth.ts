@@ -1,6 +1,6 @@
-import prisma from "./prisma";
-import argon2 from "argon2";
+import { prisma } from '@/lib/prisma';
 import { randomUUID } from "crypto";
+import argon2 from "argon2";
 
 export async function register(email: string, password: string, username?: string) {
   const hashed = await argon2.hash(password);
